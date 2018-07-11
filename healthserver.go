@@ -27,6 +27,9 @@ type Endpoint struct {
 	ResponseMode ResponseMode
 }
 
+// TODO Cached checks: Periodically executed, and if accessed via the endpoint a cached result is returned.
+// TODO   For cached checks, it might be problematic to use with Kubernetes, different time rates should be defined until the service is alive.
+
 func (ep Endpoint) Check() []error {
 	var errs []error
 	for _, check := range ep.Checks {
