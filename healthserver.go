@@ -1,8 +1,8 @@
 package healthserver
 
 import (
-		"net/http"
 	"fmt"
+	"net/http"
 )
 
 type HealthServer struct {
@@ -57,8 +57,8 @@ func check(endpoint Endpoint, response http.ResponseWriter) {
 	body := ""
 
 	if endpoint.ResponseMode == ResponseModeNone ||
-			endpoint.ResponseMode == ResponseModeFirstError ||
-			endpoint.ResponseMode == ResponseModeSimpleText {
+		endpoint.ResponseMode == ResponseModeFirstError ||
+		endpoint.ResponseMode == ResponseModeSimpleText {
 		err := endpoint.CheckUntilFirstError()
 		if err != nil {
 			status = http.StatusServiceUnavailable
