@@ -1,33 +1,90 @@
 package healthserver
 
-import "net/http"
+import (
+		"net/http"
+	"fmt"
+)
 
 type HealthServer struct {
 	Address   string
 	Endpoints []Endpoint
 }
 
+type ResponseMode int
+
+const (
+	ResponseModeNone ResponseMode = iota
+	ResponseModeSimpleText
+	ResponseModeFirstError
+	ResponseModeFullReport
+)
+
 // TODO Feature: Display specific checks / errors in an HTML page. Or only display first failing.
 // TODO   Maybe a display-settings struct or enum or so configurable for each endpoint.
 type Endpoint struct {
-	Name   string
-	Checks []Check
+	Name         string
+	Checks       []Check
+	ResponseMode ResponseMode
+}
+
+func (ep Endpoint) Check() []error {
+	var errs []error
+	for _, check := range ep.Checks {
+		err := check.Check()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
+func (ep Endpoint) CheckUntilFirstError() error {
+	for _, check := range ep.Checks {
+		err := check.Check()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type Check interface {
 	Check() error
 }
 
-func check(checks []Check, response http.ResponseWriter) {
-	for _, check := range checks {
-		err := check.Check()
+func check(endpoint Endpoint, response http.ResponseWriter) {
+	status := http.StatusOK
+	body := ""
+
+	if endpoint.ResponseMode == ResponseModeNone ||
+			endpoint.ResponseMode == ResponseModeFirstError ||
+			endpoint.ResponseMode == ResponseModeSimpleText {
+		err := endpoint.CheckUntilFirstError()
 		if err != nil {
-			response.WriteHeader(http.StatusServiceUnavailable)
-			return
+			status = http.StatusServiceUnavailable
+
+			if endpoint.ResponseMode == ResponseModeFirstError {
+				body = err.Error()
+			} else if endpoint.ResponseMode == ResponseModeSimpleText {
+				body = "UNAVAILABLE"
+			}
+		} else {
+			if endpoint.ResponseMode == ResponseModeSimpleText {
+				body = "OK"
+			}
+		}
+	} else if endpoint.ResponseMode == ResponseModeFullReport {
+		errs := endpoint.Check()
+
+		if len(errs) > 0 {
+			// TODO
+		} else {
+			// TODO
 		}
 	}
 
-	response.WriteHeader(http.StatusOK)
+	response.WriteHeader(status)
+	fmt.Fprint(response, body)
 }
 
 func (hs *HealthServer) Start() {
@@ -35,7 +92,7 @@ func (hs *HealthServer) Start() {
 
 	for _, endpoint := range hs.Endpoints {
 		handler.HandleFunc("/"+endpoint.Name, func(response http.ResponseWriter, request *http.Request) {
-			check(endpoint.Checks, response)
+			check(endpoint, response)
 		})
 	}
 
