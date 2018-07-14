@@ -2,11 +2,11 @@ package healthserver
 
 import (
 	"errors"
-		"github.com/stretchr/testify/require"
+	"fmt"
+	"github.com/phayes/freeport"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"testing"
-	"github.com/phayes/freeport"
-	"fmt"
 )
 
 func TestHealthServer(t *testing.T) {
