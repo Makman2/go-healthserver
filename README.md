@@ -46,8 +46,9 @@ A health server is made up of endpoints, which itself run your configured checks
 name is the URL path you can reach the health-endpoint. In the example above you can reach the
 configured check via `localhost:10000/health` once the health server was started. If the URL is
 queried, all registered checks defined via `Checks` are invoked and tested for errors. Each check
-itself has a name (that you can choose to your likings) and a check-function. Check-functions
-are supposed to return an error if the check failed, and `nil` otherwise.
+itself has a name (that you can choose to your likings, but they should be unique for an endpoint)
+and a check-function. Check-functions are supposed to return an error if the check failed, and `nil`
+otherwise. Multiple health checks registered for a single endpoint are executed in parallel.
 
 The health server responds with a `200` *OK* status code if all registered checks for an endpoint are
 successful, and with a `503` *Service Unavailable* if not.

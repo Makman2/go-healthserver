@@ -25,16 +25,30 @@ type Check struct {
 	Check func() error
 }
 
-func check(checks []Check, response http.ResponseWriter) {
-	for _, check := range checks {
-		err := check.Check()
-		if err != nil {
-			response.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
+func (ep Endpoint) Check() map[string]error {
+	type ErrorResult struct {
+		CheckName string
+		Err   error
 	}
 
-	response.WriteHeader(http.StatusOK)
+	var channels []chan ErrorResult
+	for _, check := range ep.Checks {
+		channel := make(chan ErrorResult)
+		channels = append(channels, channel)
+
+		go func(check Check) {
+			channel <- ErrorResult{CheckName: check.Name, Err: check.Check()}
+			close(channel)
+		}(check)
+	}
+
+	errors := make(map[string]error)
+	for _, channel := range channels {
+		result := <- channel
+		errors[result.CheckName] = result.Err
+	}
+
+	return errors
 }
 
 // Start starts the health server asynchronously, thus the function exits immediately. To shut it
@@ -47,7 +61,16 @@ func (hs *HealthServer) Start() error {
 	for i := range hs.Endpoints {
 		endpoint := hs.Endpoints[i]
 		handler.HandleFunc("/"+endpoint.Name, func(response http.ResponseWriter, request *http.Request) {
-			check(endpoint.Checks, response)
+			errors := endpoint.Check()
+
+			for _, err := range errors {
+				if err != nil {
+					response.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+			}
+
+			response.WriteHeader(http.StatusOK)
 		})
 	}
 
