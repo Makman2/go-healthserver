@@ -69,11 +69,11 @@ func check(endpoint Endpoint, response http.ResponseWriter) {
 			if endpoint.ResponseMode == ResponseModeFirstError {
 				body = err.Error()
 			} else if endpoint.ResponseMode == ResponseModeSimpleText {
-				body = "UNAVAILABLE"
+				body = http.StatusText(http.StatusServiceUnavailable)
 			}
 		} else {
 			if endpoint.ResponseMode == ResponseModeSimpleText {
-				body = "OK"
+				body = http.StatusText(http.StatusOK)
 			}
 		}
 	} else if endpoint.ResponseMode == ResponseModeFullReport {
