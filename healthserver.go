@@ -63,6 +63,8 @@ func (hs *HealthServer) Start() error {
 		handler.HandleFunc("/"+endpoint.Name, func(response http.ResponseWriter, request *http.Request) {
 			errors := endpoint.Check()
 
+			response.Header().Add("Content-Type", "text/plain; charset=utf-8")
+
 			for _, err := range errors {
 				if err != nil {
 					response.WriteHeader(http.StatusServiceUnavailable)
