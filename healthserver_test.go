@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/phayes/freeport"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"net/http"
 	"testing"
 )
@@ -21,6 +22,7 @@ func TestHealthServer(t *testing.T) {
 	type EndpointTest struct {
 		EndpointPath string
 		StatusCode   int
+		Body         string
 	}
 
 	testCases := []struct {
@@ -32,12 +34,20 @@ func TestHealthServer(t *testing.T) {
 			Name:      "No endpoints",
 			Endpoints: []Endpoint{},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusNotFound},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
 			},
 		},
 		{
-			Name: "Single endpoint - Single successful check",
+			Name: "Single endpoint - Single successful check - ResponseModePlain (default)",
 			Endpoints: []Endpoint{
 				{
 					Name: "health",
@@ -47,27 +57,168 @@ func TestHealthServer(t *testing.T) {
 				},
 			},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusOK},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusOK,
+					Body:         "",
+				},
 			},
 		},
 		{
-			Name: "Single endpoint - Single failing check",
+			Name: "Single endpoint - Single successful check - ResponseModeStatusName",
+			Endpoints: []Endpoint{
+				{
+					Name: "health",
+					Checks: []Check{
+						{Name: "test-check", Check: SuccessfulCheckFunc},
+					},
+					ResponseMode: ResponseModeStatusName,
+				},
+			},
+			EndpointTests: []EndpointTest{
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusOK,
+					Body:         "OK",
+				},
+			},
+		},
+		{
+			Name: "Single endpoint - Single successful check - ResponseModeReport",
+			Endpoints: []Endpoint{
+				{
+					Name: "health",
+					Checks: []Check{
+						{Name: "test-check", Check: SuccessfulCheckFunc},
+					},
+					ResponseMode: ResponseModeReport,
+				},
+			},
+			EndpointTests: []EndpointTest{
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusOK,
+					Body: "<meta charset=utf-8>" +
+						"<title>Health Status</title>" +
+						"<style>" +
+						"table{border-collapse:collapse}" +
+						"tr{height:2em}" +
+						"td{padding-left:.7em;padding-right:.7em}" +
+						".status{text-align:center}" +
+						".failing{background-color:red}" +
+						".passing{background-color:#7cfc00}" +
+						"</style>" +
+						"<table>" +
+						"<tr class=\"passing\">" +
+						"<td class=status>&#x2714" +
+						"<td>test-check\n" +
+						"</table>",
+				},
+			},
+		},
+		{
+			Name: "Single endpoint - Single failing check - ResponseModePlain",
 			Endpoints: []Endpoint{
 				{
 					Name: "health",
 					Checks: []Check{
 						{Name: "test-check", Check: UnsuccessfulCheckFunc},
 					},
+					ResponseMode: ResponseModePlain,
 				},
 			},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusServiceUnavailable},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "",
+				},
 			},
 		},
 		{
-			Name: "Single endpoint - Single successful single unsuccessful check",
+			Name: "Single endpoint - Single failing check - ResponseModeStatusName",
+			Endpoints: []Endpoint{
+				{
+					Name: "health",
+					Checks: []Check{
+						{Name: "test-check", Check: UnsuccessfulCheckFunc},
+					},
+					ResponseMode: ResponseModeStatusName,
+				},
+			},
+			EndpointTests: []EndpointTest{
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "Service Unavailable",
+				},
+			},
+		},
+		{
+			Name: "Single endpoint - Single failing check - ResponseModeReport",
+			Endpoints: []Endpoint{
+				{
+					Name: "health",
+					Checks: []Check{
+						{Name: "test-check", Check: UnsuccessfulCheckFunc},
+					},
+					ResponseMode: ResponseModeReport,
+				},
+			},
+			EndpointTests: []EndpointTest{
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body: "<meta charset=utf-8>" +
+						"<title>Health Status</title>" +
+						"<style>" +
+						"table{border-collapse:collapse}" +
+						"tr{height:2em}" +
+						"td{padding-left:.7em;padding-right:.7em}" +
+						".status{text-align:center}" +
+						".failing{background-color:red}" +
+						".passing{background-color:#7cfc00}" +
+						"</style>" +
+						"<table>" +
+						"<tr class=\"failing\">" +
+						"<td class=status>&#x2718" +
+						"<td>test-check\n" +
+						"</table>",
+				},
+			},
+		},
+		{
+			Name: "Single endpoint - Single successful single unsuccessful check - ResponseModePlain",
 			Endpoints: []Endpoint{
 				{
 					Name: "health",
@@ -75,11 +226,87 @@ func TestHealthServer(t *testing.T) {
 						{Name: "test-check1", Check: SuccessfulCheckFunc},
 						{Name: "test-check2", Check: UnsuccessfulCheckFunc},
 					},
+					ResponseMode: ResponseModePlain,
 				},
 			},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusServiceUnavailable},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "",
+				},
+			},
+		},
+		{
+			Name: "Single endpoint - Single successful single unsuccessful check - ResponseModeStatusName",
+			Endpoints: []Endpoint{
+				{
+					Name: "health",
+					Checks: []Check{
+						{Name: "test-check1", Check: SuccessfulCheckFunc},
+						{Name: "test-check2", Check: UnsuccessfulCheckFunc},
+					},
+					ResponseMode: ResponseModeStatusName,
+				},
+			},
+			EndpointTests: []EndpointTest{
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "Service Unavailable",
+				},
+			},
+		},
+		{
+			Name: "Single endpoint - Single successful single unsuccessful check - ResponseModeReport",
+			Endpoints: []Endpoint{
+				{
+					Name: "health",
+					Checks: []Check{
+						{Name: "test-check1", Check: SuccessfulCheckFunc},
+						{Name: "test-check2", Check: UnsuccessfulCheckFunc},
+					},
+					ResponseMode: ResponseModeReport,
+				},
+			},
+			EndpointTests: []EndpointTest{
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body: "<meta charset=utf-8>" +
+						"<title>Health Status</title>" +
+						"<style>" +
+						"table{border-collapse:collapse}" +
+						"tr{height:2em}" +
+						"td{padding-left:.7em;padding-right:.7em}" +
+						".status{text-align:center}" +
+						".failing{background-color:red}" +
+						".passing{background-color:#7cfc00}" +
+						"</style>" +
+						"<table>" +
+						"<tr class=\"passing\">" +
+						"<td class=status>&#x2714" +
+						"<td>test-check1\n" +
+						"<tr class=\"failing\">" +
+						"<td class=status>&#x2718" +
+						"<td>test-check2\n" +
+						"</table>",
+				},
 			},
 		},
 		{
@@ -99,10 +326,26 @@ func TestHealthServer(t *testing.T) {
 				},
 			},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health/test-endpoint1", StatusCode: http.StatusOK},
-				{EndpointPath: "health/test-endpoint2", StatusCode: http.StatusOK},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health/test-endpoint1",
+					StatusCode:   http.StatusOK,
+					Body:         "",
+				},
+				{
+					EndpointPath: "health/test-endpoint2",
+					StatusCode:   http.StatusOK,
+					Body:         "",
+				},
 			},
 		},
 		{
@@ -122,10 +365,26 @@ func TestHealthServer(t *testing.T) {
 				},
 			},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health/test-endpoint1", StatusCode: http.StatusServiceUnavailable},
-				{EndpointPath: "health/test-endpoint2", StatusCode: http.StatusServiceUnavailable},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health/test-endpoint1",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "",
+				},
+				{
+					EndpointPath: "health/test-endpoint2",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "",
+				},
 			},
 		},
 		{
@@ -148,10 +407,26 @@ func TestHealthServer(t *testing.T) {
 				},
 			},
 			EndpointTests: []EndpointTest{
-				{EndpointPath: "", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health", StatusCode: http.StatusNotFound},
-				{EndpointPath: "health/test-endpoint1", StatusCode: http.StatusServiceUnavailable},
-				{EndpointPath: "health/test-endpoint2", StatusCode: http.StatusOK},
+				{
+					EndpointPath: "",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health",
+					StatusCode:   http.StatusNotFound,
+					Body:         "404 page not found\n",
+				},
+				{
+					EndpointPath: "health/test-endpoint1",
+					StatusCode:   http.StatusServiceUnavailable,
+					Body:         "",
+				},
+				{
+					EndpointPath: "health/test-endpoint2",
+					StatusCode:   http.StatusOK,
+					Body:         "",
+				},
 			},
 		},
 	}
@@ -173,10 +448,19 @@ func TestHealthServer(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, endpointTest := range testCase.EndpointTests {
-				t.Run(endpointTest.EndpointPath, func(t *testing.T) {
+				testName := endpointTest.EndpointPath
+				if len(testName) == 0 {
+					testName = "\"\""
+				}
+
+				t.Run(testName, func(t *testing.T) {
 					response, err := http.Get("http://" + address + "/" + endpointTest.EndpointPath)
 					require.NoError(t, err)
 					require.Equal(t, endpointTest.StatusCode, response.StatusCode)
+
+					body, err := ioutil.ReadAll(response.Body)
+					require.NoError(t, err)
+					require.Equal(t, endpointTest.Body, string(body))
 				})
 			}
 		})
