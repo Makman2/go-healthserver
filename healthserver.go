@@ -25,10 +25,17 @@ type Check struct {
 	Check func() error
 }
 
-func (ep Endpoint) Check() map[string]error {
+// CheckResult describes the result of a check.
+type CheckResult struct {
+	Name string
+	Err  error
+}
+
+// Check invokes all registered checks for the given endpoint.
+func (ep Endpoint) Check() []CheckResult {
 	type ErrorResult struct {
 		CheckName string
-		Err   error
+		Err       error
 	}
 
 	var channels []chan ErrorResult
@@ -42,10 +49,10 @@ func (ep Endpoint) Check() map[string]error {
 		}(check)
 	}
 
-	errors := make(map[string]error)
+	var errors []CheckResult
 	for _, channel := range channels {
-		result := <- channel
-		errors[result.CheckName] = result.Err
+		result := <-channel
+		errors = append(errors, CheckResult{Name: result.CheckName, Err: result.Err})
 	}
 
 	return errors
@@ -61,12 +68,12 @@ func (hs *HealthServer) Start() error {
 	for i := range hs.Endpoints {
 		endpoint := hs.Endpoints[i]
 		handler.HandleFunc("/"+endpoint.Name, func(response http.ResponseWriter, request *http.Request) {
-			errors := endpoint.Check()
+			checkResults := endpoint.Check()
 
 			response.Header().Add("Content-Type", "text/plain; charset=utf-8")
 
-			for _, err := range errors {
-				if err != nil {
+			for _, checkResult := range checkResults {
+				if checkResult.Err != nil {
 					response.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
