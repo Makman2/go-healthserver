@@ -1,6 +1,7 @@
 package healthserver
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
@@ -13,10 +14,36 @@ type HealthServer struct {
 	server    *http.Server
 }
 
+type ResponseMode int
+
+const (
+	// ResponseModePlain displays no body at all for a healthcheck endpoint, just the status code.
+	ResponseModePlain = iota
+	// ResponseModeStatusName displays a status description in the response body.
+	ResponseModeStatusName
+	// ResponseModeReport displays a detailed report consisting of all registered check names and
+	// their results.
+	ResponseModeReport
+)
+
+func (rm ResponseMode) String() string {
+	switch rm {
+	case ResponseModePlain:
+		return "ResponseModePlain"
+	case ResponseModeStatusName:
+		return "ResponseModeStatusName"
+	case ResponseModeReport:
+		return "ResponseModeReport"
+	}
+	return "UNKNOWN"
+}
+
+
 // Endpoint specifies a certain endpoint and its health checks.
 type Endpoint struct {
-	Name   string
-	Checks []Check
+	Name         string
+	Checks       []Check
+	ResponseMode ResponseMode
 }
 
 // Check specifies a health check.
@@ -70,16 +97,44 @@ func (hs *HealthServer) Start() error {
 		handler.HandleFunc("/"+endpoint.Name, func(response http.ResponseWriter, request *http.Request) {
 			checkResults := endpoint.Check()
 
-			response.Header().Add("Content-Type", "text/plain; charset=utf-8")
+			status := http.StatusOK
 
 			for _, checkResult := range checkResults {
 				if checkResult.Err != nil {
-					response.WriteHeader(http.StatusServiceUnavailable)
-					return
+					status = http.StatusServiceUnavailable
+					break
 				}
 			}
 
-			response.WriteHeader(http.StatusOK)
+			const contentTypeText = "text/plain"
+			const contentTypeHtml = "text/html"
+
+			var body []byte
+			var contentType string
+
+			// Generate response body.
+			switch endpoint.ResponseMode {
+			case ResponseModePlain:
+				contentType = contentTypeText
+				body = nil
+			case ResponseModeStatusName:
+				contentType = contentTypeText
+				body = []byte(http.StatusText(status))
+			case ResponseModeReport:
+				contentType = contentTypeHtml
+				var temporaryBuffer bytes.Buffer
+
+				err := getReportTemplate().Execute(&temporaryBuffer, checkResults)
+				if err != nil {
+					panic(err)
+				}
+
+				body = temporaryBuffer.Bytes()
+			}
+
+			response.Header().Add("Content-Type", contentType+"; charset=utf-8")
+			response.WriteHeader(status)
+			response.Write(body)
 		})
 	}
 

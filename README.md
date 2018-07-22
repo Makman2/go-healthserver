@@ -52,3 +52,22 @@ otherwise. Multiple health checks registered for a single endpoint are executed 
 
 The health server responds with a `200` *OK* status code if all registered checks for an endpoint are
 successful, and with a `503` *Service Unavailable* if not.
+
+### Response Modes
+
+go-healthserver features different response modes that show additional information about health
+checks in the response body. There are 3 different response modes available:
+
+- `ResponseModePlain` (default)
+
+  The response body is completely empty and contains no additional information. Only the status
+  code shows whether the health checks were successful or not. This response mode is intended
+  for use in automatic systems, like for Kubernetes health checks.
+
+- `ResponseModeStatusName`
+
+  The response body contains the official status descriptions, either `OK` or `Service Unavailable`.
+
+- `ResponseModeReport`
+
+  HTML response that shows a table of all health checks executed and which passed and which failed.
